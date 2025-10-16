@@ -7,15 +7,10 @@ namespace UIFramework
     public class UIManager : Singleton<UIManager>
     {
         private readonly Stack<IBasePanel> _panelStack = new();
+        private Dictionary<string, IBasePanel> _uiPanelCache = new();     //已经实例化的面板字典
+
         public IReadOnlyCollection<IBasePanel> Panels => _panelStack;
 
-        /// <summary>
-        /// 展示初始化的面板
-        /// </summary>
-        private void Start()
-        {
-            //GameStartPanel.Instance.Show();
-        }
 
         /// <summary>
         /// 为所有的面板统一执行Init初始化方法
@@ -27,11 +22,70 @@ namespace UIFramework
             foreach (var panel in basePanels) panel.Init();
         }
 
+        /// <summary>
+        /// 展示初始化的面板
+        /// </summary>
+        private void Start()
+        {
+            GetUIPanel<TestPanel>().Show();
+        }
+
+
         private void Update()
         {
             if (Input.GetKeyDown(KeyCode.Escape))
                 if (Peek() != null) Peek().OnPressedEsc();
         }
+
+
+        #region 面板加载与缓存
+
+        /// <summary>
+        /// 获取或实例化面板，实际调用所有面板都依靠这个函数了
+        /// </summary>
+        public T GetUIPanel<T>() where T : BasePanel<T>
+        {
+            string panelName = typeof(T).Name;
+
+            if (_uiPanelCache.TryGetValue(panelName, out var cachedPanel))
+            {
+                // 已存在，直接返回
+                return cachedPanel as T;
+            }
+
+            if (!UIConst.UIPathDict.TryGetValue(panelName, out string path)) 
+            {
+                Debug.LogError($"未找到 {panelName} 的路径，请在 UIPathDict 中配置。");
+                return null;
+            }
+
+            // 从 Resources 实例化
+            GameObject prefab = Resources.Load<GameObject>(path);
+            if (prefab == null)
+            {
+                Debug.LogError($"未能在 {path} 找到UI预制体，请检查路径。");
+                return null;
+            }
+
+            GameObject panelObj = Instantiate(prefab, transform);
+            panelObj.name = panelName;
+
+            var panel = panelObj.GetComponent<T>();
+            if (panel == null)
+            {
+                Debug.LogError($"{panelName} 预制体上缺少 {typeof(T).Name} 脚本。");
+                return null;
+            }
+
+            // 初始化并缓存
+            panel.Init();
+            panelObj.SetActive(false);
+            _uiPanelCache.Add(panelName, panel);
+
+            return panel;
+        }
+
+        #endregion
 
         #region Panel栈操作
 

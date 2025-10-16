@@ -13,9 +13,19 @@ namespace UIFramework
     public interface IBasePanel
     {
         /// <summary>
+        ///     是否为父类UI（即有子ui）
+        /// </summary>
+        bool IsParentPanel { get; }
+
+        /// <summary>
         ///     是否存在于面板栈内
         /// </summary>
         bool IsInStack { get; }
+
+        /// <summary>
+        ///     管理自己子类panel的栈
+        /// </summary>
+        Stack<IBasePanel> ChildrenPanel { get; }
 
         /// <summary>
         ///     初始化方法
@@ -77,6 +87,10 @@ namespace UIFramework
         /// </summary>
         public bool IsInStack { get; private set; }
 
+        public bool IsParentPanel { get; private set; }
+
+        public Stack<IBasePanel> ChildrenPanel => throw new System.NotImplementedException();
+
         protected override void Awake()
         {
             base.Awake();
@@ -106,10 +120,13 @@ namespace UIFramework
         public void Show()
         {
             if (IsInStack) return;
-            UIManager.Instance.PushPanel(this);
-            gameObject.SetActive(true);
-            //设置为最后一个子物体，防止被其他已经打开的面板遮挡
-            gameObject.transform.SetAsLastSibling();
+
+            // 确保面板实例已存在（若是通过 UIManager 管理）
+            if (!gameObject.activeSelf)
+                gameObject.SetActive(true);
+
+            UIManager.Instance.PushPanel(this, false);
+            transform.SetAsLastSibling();       //设置为最后一个子物体，防止被其他已经打开的面板遮挡
             IsInStack = true;
         }
 
@@ -121,20 +138,26 @@ namespace UIFramework
         {
             if (!IsInStack) return;
 
-            if (ReferenceEquals(UIManager.Instance.Peek(), this))
+            while (true)
             {
-                UIManager.Instance.PopPanel();
-                IsInStack = false;
-            }
-            else
-            {
-                Debug.LogWarning("注意，你关闭了栈顶以外的面板");
-                while (!ReferenceEquals(UIManager.Instance.Peek(), this))
+                var topPanel = UIManager.Instance.Peek();
+
+                if (topPanel == null)
                 {
-                    UIManager.Instance.Peek().Hide();
+                    Debug.LogWarning("栈已空，停止Hide循环");
+                    break;
+                }
+
+                if (ReferenceEquals(topPanel, this))
+                {
                     UIManager.Instance.PopPanel();
                     IsInStack = false;
+                    break;
                 }
+
+                Debug.Log("不满足条件：" + topPanel + " This：" + this);
+                topPanel.Hide(); // 隐藏当前栈顶
+                UIManager.Instance.PopPanel();
             }
         }
 
@@ -230,33 +253,47 @@ namespace UIFramework
         /// 根据在场景中GameObject的名称来寻找UI控件，如果同名则返回第一个找到的（从上往下）
         /// </summary>
         /// <param name="controlName"></param>
-        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="0"></typeparam>
         /// <returns></returns>
-        protected T GetControl<T>(string controlName) where T : UIBehaviour
+        protected T0 GetControl<T0>(string controlName) where T0 : UIBehaviour
         {
             if (!_controlDic.ContainsKey(controlName)) return null;
+
             for (var i = 0; i < _controlDic[controlName].Count; ++i)
-                if (_controlDic[controlName][i] is T)
-                    return _controlDic[controlName][i] as T;
+            {
+                if (_controlDic[controlName][i] is T0)
+                {
+                    return _controlDic[controlName][i] as T0;
+                }
+            }
 
             return null;
         }
 
-        private void FindChildrenControl<T>() where T : UIBehaviour
+        private void FindChildrenControl<T1>() where T1 : UIBehaviour
         {
-            var controls = GetComponentsInChildren<T>(true);
+            var controls = GetComponentsInChildren<T1>(true);
             for (var i = 0; i < controls.Length; ++i)
             {
                 var objName = controls[i].gameObject.name;
+
                 if (_controlDic.TryGetValue(objName, out var value1))
+                {
                     value1.Add(controls[i]);
+                }
                 else
+                {
                     _controlDic.Add(objName, new List<UIBehaviour> { controls[i] });
+                }
 
                 if (controls[i] is Button)
+                {
                     (controls[i] as Button)?.onClick.AddListener(() => { OnClick(objName); });
+                }
                 else if (controls[i] is Toggle)
+                {
                     (controls[i] as Toggle)?.onValueChanged.AddListener(value => { OnValueChanged(objName, value); });
+                }
             }
         }
     }
