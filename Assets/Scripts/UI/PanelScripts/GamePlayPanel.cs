@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UIFramework;
 using UnityEngine;
 
-public class SettingPanel : BasePanel<SettingPanel>
+public class GamePlayPanel : BasePanel<GamePlayPanel>
 {
     protected override void Awake()
     {
@@ -12,11 +12,11 @@ public class SettingPanel : BasePanel<SettingPanel>
 
     //private void OnEnable()
     //{
-    //    Debug.Log("设置面板激活");
+    //    Debug.Log("游玩面板激活");
     //}
 
     //private void OnDisable()
     //{
-    //    Debug.Log("设置面板隐藏");
+    //    Debug.Log("游玩面板隐藏");
     //}
 }

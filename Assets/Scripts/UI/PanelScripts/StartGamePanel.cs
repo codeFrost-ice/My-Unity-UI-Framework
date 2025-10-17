@@ -1,4 +1,4 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using UIFramework;
 using UnityEngine;
@@ -12,11 +12,11 @@ public class StartGamePanel : BasePanel<StartGamePanel>
 
     private void OnEnable()
     {
-        Debug.Log("¿ªÊ¼ÓÎÏ·Ãæ°å¼¤»î");
+        Debug.Log("å¼€å§‹æ¸¸æˆé¢æ¿æ¿€æ´»");
     }
 
     private void OnDisable()
     {
-        Debug.Log("¿ªÊ¼ÓÎÏ·Ãæ°åÒş²Ø");
+        Debug.Log("å¼€å§‹æ¸¸æˆé¢æ¿éšè—");
     }
 }

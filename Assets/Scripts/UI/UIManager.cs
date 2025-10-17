@@ -27,12 +27,21 @@ namespace UIFramework
         /// </summary>
         private void Start()
         {
-            GetUIPanel<TestPanel>().Show();
+            //GetUIPanel<TestPanel>().Show();
         }
 
 
         private void Update()
         {
+            if (Input.GetKeyDown(KeyCode.Alpha1))
+            {
+                GetUIPanel<Test1Panel>().Show();
+            }
+            if (Input.GetKeyDown(KeyCode.Alpha2))
+            {
+                GetUIPanel<TestPanel>().Show();
+            }
+
             if (Input.GetKeyDown(KeyCode.Escape))
                 if (Peek() != null) Peek().OnPressedEsc();
         }
@@ -43,19 +52,19 @@ namespace UIFramework
         /// <summary>
         /// 获取或实例化面板，实际调用所有面板都依靠这个函数了
         /// </summary>
-        public T GetUIPanel<T>() where T : BasePanel<T>
+        public T GetUIPanel<T>(IBasePanel parentPanel = null) where T : BasePanel<T>
         {
             string panelName = typeof(T).Name;
 
             if (_uiPanelCache.TryGetValue(panelName, out var cachedPanel))
             {
-                // 已存在，直接返回
+                //Debug.Log($"GetUIPanel()    缓存找到 {panelName} ，激活。");
                 return cachedPanel as T;
             }
 
             if (!UIConst.UIPathDict.TryGetValue(panelName, out string path)) 
             {
-                Debug.LogError($"未找到 {panelName} 的路径，请在 UIPathDict 中配置。");
+                Debug.LogError($"GetUIPanel()   未找到 {panelName} 的路径，请在 UIPathDict 中配置。");
                 return null;
             }
 
@@ -63,7 +72,7 @@ namespace UIFramework
             GameObject prefab = Resources.Load<GameObject>(path);
             if (prefab == null)
             {
-                Debug.LogError($"未能在 {path} 找到UI预制体，请检查路径。");
+                Debug.LogError($"GetUIPanel()   未能在 {path} 找到UI预制体，请检查路径。");
                 return null;
             }
 
@@ -73,7 +82,7 @@ namespace UIFramework
             var panel = panelObj.GetComponent<T>();
             if (panel == null)
             {
-                Debug.LogError($"{panelName} 预制体上缺少 {typeof(T).Name} 脚本。");
+                Debug.LogError($"GetUIPanel()   {panelName} 预制体上缺少 {typeof(T).Name} 脚本。");
                 return null;
             }
 
@@ -81,6 +90,9 @@ namespace UIFramework
             panel.Init();
             panelObj.SetActive(false);
             _uiPanelCache.Add(panelName, panel);
+
+            if (parentPanel != null)
+                panel.SetParentPanel(parentPanel);
 
             return panel;
         }
@@ -125,14 +137,49 @@ namespace UIFramework
         {
             if (basePanel.IsInStack)
             {
-                Debug.LogWarning("已经存在于栈内，无法再将其存入栈内");
+                Debug.LogWarning("PushPanel()   已经存在于栈内，无法再将其存入栈内");
                 return;
             }
 
-            if (callback && Peek() != null) Peek().CallBack(false);
+            var topPanel = Peek();
+            // 情况1：当前没有面板，直接入栈
+            if (topPanel == null)
+            {
+                _panelStack.Push(basePanel);
+                basePanel.CallBack(true);
+                return;
+            }
 
+            // 2️⃣ 如果当前栈顶是“父面板”
+            if (topPanel is IBasePanel parentPanel && parentPanel != null)
+            {
+                // 2.1 当前入栈面板的父面板与栈顶相同 => 属于子面板，不隐藏父面板
+                if (basePanel.ParentPanel == parentPanel)
+                {
+                    //Debug.Log($"PushPanel() 子面板 {basePanel} 属于父面板 {parentPanel}，不隐藏父面板");
+                }
+                else
+                {
+                    // 2.2 不同父面板 => 隐藏整个旧父面板分组
+                    //Debug.Log($"PushPanel() 新面板 {basePanel} 不属于当前父面板 {parentPanel}，隐藏旧面板组");
+                    HidePanelGroup(parentPanel);
+                }
+            }
+
+            // 3️⃣ 如果当前入栈的面板本身是父面板
+            if (basePanel.ParentPanel == null)
+            {
+                // 隐藏所有不属于它的旧面板组（不出栈，只callback(false)）
+                HideAllExceptParent(basePanel);
+            }
+
+            // 4️⃣ 入栈
             _panelStack.Push(basePanel);
             basePanel.CallBack(true);
+
+            //if (callback && Peek() != null && !Peek().IsParentPanel) Peek().CallBack(false);
+            //_panelStack.Push(basePanel);
+            //basePanel.CallBack(true);
         }
 
         /// <summary>
@@ -145,16 +192,65 @@ namespace UIFramework
         {
             if (_panelStack.Count <= 0)
             {
-                Debug.LogError("栈为空,不能弹出");
+                Debug.LogError("PopPanel()  栈为空,不能弹出");
                 return null;
             }
 
-            if (Peek() != null) Peek().CallBack(false);
+            var popped = _panelStack.Pop();
+            popped.CallBack(false);     // 弹出的面板渐隐
 
-            var res = _panelStack.Pop();
-            if (callback && Peek() != null) Peek().CallBack(true);
+            if (callback && _panelStack.Count > 0)
+            {
+                var newTop = Peek();
 
-            return res;
+                // 如果新栈顶有父面板，让它和它的子面板渐显
+                if (newTop.ParentPanel != null)
+                {
+                    var parentPanel = newTop.ParentPanel;
+                    parentPanel.CallBack(true);
+                    foreach (var p in _panelStack)
+                    {
+                        if (p.ParentPanel == parentPanel)
+                            p.CallBack(true);
+                        break;  //找到第一个就可以，不能破坏栈层级结构
+                    }
+                }
+                else
+                {
+                    newTop.CallBack(true);
+                }
+            }
+
+            return popped;
+        }
+
+        /// <summary>
+        /// 隐藏某个父面板及其所有子面板（不移出栈）
+        /// </summary>
+        private void HidePanelGroup(IBasePanel parent)
+        {
+            foreach (var panel in _panelStack)
+            {
+                if (panel == parent || panel.ParentPanel == parent)
+                {
+                    panel.CallBack(false);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 隐藏所有与指定父面板无关的面板组（但不Pop）
+        /// </summary>
+        private void HideAllExceptParent(IBasePanel currentParent)
+        {
+            foreach (var panel in _panelStack)
+            {
+                if (panel == currentParent) continue;
+                if (panel.ParentPanel != currentParent)
+                {
+                    panel.CallBack(false);
+                }
+            }
         }
 
         #endregion

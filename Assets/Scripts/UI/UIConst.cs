@@ -24,7 +24,9 @@ namespace UIFramework
         {
             { "StartGamePanel", "Panels/StartGamePanel" },
             { "SettingPanel", "Panels/SettingPanel" },
-            { "TestPanel", "Panels/TestPanel" }
+            { "TestPanel", "Panels/TestPanel" },
+            { "Test1Panel", "Panels/Test1Panel" },
+            { "GamePlayPanel","Panels/GamePlayPanel" }
         };
     }
 }

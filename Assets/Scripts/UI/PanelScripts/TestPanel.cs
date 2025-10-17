@@ -1,4 +1,4 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using UIFramework;
 using UnityEngine;
@@ -10,21 +10,25 @@ public class TestPanel : BasePanel<TestPanel>
         base.Awake();
     }
 
-    private void OnEnable()
-    {
-        Debug.Log("²âÊÔÃæ°å¼¤»î");
-    }
+    //private void OnEnable()
+    //{
+    //    Debug.Log("æµ‹è¯•é¢æ¿æ¿€æ´»");
+    //}
 
-    private void OnDisable()
-    {
-        Debug.Log("²âÊÔÃæ°åÒş²Ø");
-    }
+    //private void OnDisable()
+    //{
+    //    Debug.Log("æµ‹è¯•é¢æ¿éšè—");
+    //}
 
     void Update()
     {
         if(Input.GetKeyDown(KeyCode.Q))
         {
-            UIManager.Instance.GetUIPanel<SettingPanel>().Show();
+            UIManager.Instance.GetUIPanel<SettingPanel>(this).Show();
+        }
+        if (Input.GetKeyDown(KeyCode.W))
+        {
+            UIManager.Instance.GetUIPanel<GamePlayPanel>(this).Show();
         }
     }
 }

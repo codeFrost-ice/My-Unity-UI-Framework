@@ -13,19 +13,14 @@ namespace UIFramework
     public interface IBasePanel
     {
         /// <summary>
-        ///     是否为父类UI（即有子ui）
+        ///     存父亲面板
         /// </summary>
-        bool IsParentPanel { get; }
+        IBasePanel ParentPanel { get; }
 
         /// <summary>
         ///     是否存在于面板栈内
         /// </summary>
         bool IsInStack { get; }
-
-        /// <summary>
-        ///     管理自己子类panel的栈
-        /// </summary>
-        Stack<IBasePanel> ChildrenPanel { get; }
 
         /// <summary>
         ///     初始化方法
@@ -40,7 +35,7 @@ namespace UIFramework
         /// <summary>
         ///     Hide的同时会尝试将其弹出，注意不能调用栈顶以外面板的Hide
         /// </summary>
-        void Hide();
+        void Hide(bool isParentCallBack = false);
 
         /// <summary>
         ///     按下ESC键时触发
@@ -67,6 +62,7 @@ namespace UIFramework
     /// <typeparam name="T">决定单例模式Instance的类型</typeparam>
     public class BasePanel<T> : Singleton<T>, IBasePanel where T : BasePanel<T>
     {
+        [SerializeField] private bool isParentPanel = false;
         private readonly Dictionary<string, List<UIBehaviour>> _controlDic = new();
         private CanvasGroup _canvasGroup;
 
@@ -87,14 +83,18 @@ namespace UIFramework
         /// </summary>
         public bool IsInStack { get; private set; }
 
-        public bool IsParentPanel { get; private set; }
+        public IBasePanel ParentPanel { get; private set; }
 
-        public Stack<IBasePanel> ChildrenPanel => throw new System.NotImplementedException();
-
-        protected override void Awake()
+        // 允许 UIManager 在创建时赋值
+        public void SetParentPanel(IBasePanel parent)
         {
-            base.Awake();
+            ParentPanel = parent;
         }
+
+        /// <summary>
+        /// 面板是否显示
+        /// </summary>
+        public bool IsVisible { get; private set; } = false;
 
         /// <summary>
         /// 初始化，搜寻控件
@@ -121,9 +121,7 @@ namespace UIFramework
         {
             if (IsInStack) return;
 
-            // 确保面板实例已存在（若是通过 UIManager 管理）
-            if (!gameObject.activeSelf)
-                gameObject.SetActive(true);
+            if (!gameObject.activeSelf) gameObject.SetActive(true);
 
             UIManager.Instance.PushPanel(this, false);
             transform.SetAsLastSibling();       //设置为最后一个子物体，防止被其他已经打开的面板遮挡
@@ -134,7 +132,7 @@ namespace UIFramework
         /// 关闭当前面板，IsInStack = false,一般只对栈顶的元素执行,若不是栈顶元素执行,将会弹出该元素之上的所有元素和他自己   
         ///  TODO: 要改为区分小的子Panel，判断是否是需要存栈的Panel
         /// </summary>
-        public void Hide()
+        public void Hide(bool isParentCallBack = false)
         {
             if (!IsInStack) return;
 
@@ -144,20 +142,25 @@ namespace UIFramework
 
                 if (topPanel == null)
                 {
-                    Debug.LogWarning("栈已空，停止Hide循环");
+                    Debug.LogWarning("Hide()    栈已空，停止Hide循环");
                     break;
                 }
 
+                // 如果相等，直接关闭结束
                 if (ReferenceEquals(topPanel, this))
                 {
-                    UIManager.Instance.PopPanel();
+                    UIManager.Instance.PopPanel(!isParentCallBack);
                     IsInStack = false;
                     break;
                 }
 
-                Debug.Log("不满足条件：" + topPanel + " This：" + this);
-                topPanel.Hide(); // 隐藏当前栈顶
-                UIManager.Instance.PopPanel();
+                //Debug.Log("Hide()   不满足条件：" + topPanel + " This：" + this);
+                // 如果顶部刚好是关闭的子面板
+                if(ReferenceEquals(topPanel.ParentPanel, this))
+                {
+                    topPanel.Hide(true); // 隐藏当前栈顶，加上父亲callback不要再出现
+                }
+                topPanel.Hide();
             }
         }
 
@@ -179,6 +182,10 @@ namespace UIFramework
         /// <example>例如栈为[1],新push了一个2变为[1,2],此时1会执行CallBack(false),2会执行CallBack(true)</example>
         public void CallBack(bool flag)
         {
+            if (flag && IsVisible) return;   // 防止重复渐显
+            if (!flag && !IsVisible) return; // 防止重复渐隐
+
+            IsVisible = flag;
             ChangePanelAlphaEffect(flag);
         }
 
